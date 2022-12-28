@@ -1,7 +1,7 @@
 # prowlet
 
 <a href="./LICENSE.md"><img src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
-<a href="https://aur.archlinux.org/packages/prowlet-git/"><img src="https://img.shields.io/aur/version/cuff-git"></a>
+<a href="https://aur.archlinux.org/packages/prowlet-git/"><img src="https://img.shields.io/aur/version/prowlet-git"></a>
 
 Query the [Prowlarr](https://github.com/prowlarr/prowlarr) search API from the command line.
 
@@ -19,12 +19,12 @@ If you are installing manually, you'll need to also install the following depend
 
 ### Manual
 
-To manually install `cuff` just git clone this repository and place the script in your `$PATH`:
+To manually install `prowlet` just git clone this repository and place the script in your `$PATH`:
 
 ```
-git clone https://github.com/loiccoyle/cuff
-cd cuff
-cp cuff /somewhere/in/your/PATH/
+git clone https://github.com/loiccoyle/prowlet
+cd prowlet
+cp prowlet /somewhere/in/your/PATH/
 ```
 
 If you want <TAB> completion, place the corresponding [`completion`](completions) file somewhere your shell knows about.
@@ -34,7 +34,7 @@ If you want <TAB> completion, place the corresponding [`completion`](completions
 Using your prefered AUR helper:
 
 ```
-paru -S cuff-git
+paru -S prowlet-git
 ```
 
 # Completions
