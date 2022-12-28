@@ -1,0 +1,47 @@
+#compdef _prowlet prowlet
+
+IFS=$'\n'
+CATEGORIES="$(printf '"%s" ' $(prowlet categories 2> /dev/null))"
+INDEXERS="$(printf '"%s" ' $(prowlet indexers 2> /dev/null))"
+
+function _cuff {
+    local line
+    local ret=1
+
+    # completion area for subcommands
+    function _commands {
+        local -a commands
+        commands=(
+            "search" \
+            "indexers" \
+            "categories" \
+            "config" \
+            "open"
+        )
+        _describe "command" commands
+    }
+
+    # completion area for options/arguments
+    _arguments -C \
+        '-h[Show help message and exit]' \
+        '-r[Raw output, no coloring.]' \
+        '*-v[Increase verbosity]' \
+        '-s[Start prowlarr.service if not running]' \
+        '-k[Stop prowlarr.service before exiting]' \
+        '-u[Prowlarr url]:url:' \
+        '-a[Prowlarr API key]:key:' \
+        "1: :_commands"  \
+        "*::arg:->args"
+
+    case "$line[1]" in
+        # call completion functions for each nested subcommand here
+        "search" )
+            _arguments \
+            "-f[Output format]:format:" \
+            "*-c[Search category]:category:($CATEGORIES)" \
+            "*-i[Search indexer]:indexer:($INDEXERS)" \
+            "-s[Sort results by key]:sortkey:" \
+            "*::arg:->args"
+        ;;
+    esac
+}

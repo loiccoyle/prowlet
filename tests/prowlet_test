@@ -1,0 +1,8 @@
+#!/bin/sh
+#
+# Quick script to run the examples from the help msg.
+
+prowlet -r -h | grep '\$' | sed 's/.*$ //' | while read -r TEST_CMD; do
+    printf "Running: %s\n" "$TEST_CMD"
+    $TEST_CMD >/dev/null && printf "  SUCCESS\n" || printf "  FAILED\n" >&2
+done

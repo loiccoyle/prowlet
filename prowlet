@@ -1,0 +1,336 @@
+#!/bin/env bash
+#
+# Query the prowlarr search API from the command line.
+# Requires prowlarr, jq, curl
+
+API_ROOT="api/v1"
+CMD_NAME="$(basename "$0")"
+
+declare -A CATEGORIES
+declare -A INDEXERS
+
+# Used in open subcommand
+OPEN_CMD="${BROWSER:-${OPENER:-"xdg-open"}}"
+
+# Formating codes
+if type tput >/dev/null; then
+    BOLD="$(tput bold)"
+    RESET="$(tput sgr0)"
+    COLOR1="$(tput setaf 1)"
+    COLOR2="$(tput setaf 2)"
+else
+    BOLD=""
+    RESET=""
+    COLOR1=""
+    COLOR2=""
+fi
+
+err_msg_exit() {
+    # Print an error to stderr and exit.
+    printf "%s%s%s%s\n" "${BOLD}" "${COLOR2}" "$*" "${RESET}" >&2
+    exit 1
+}
+
+msg() {
+    # Print a message to stderr.
+    [ "$VERBOSE" -ge "$1" ] && printf "%s%s%s%s\n" "${BOLD}" "${COLOR1}" "$2" "${RESET}" >&2
+}
+
+# Check requirements
+type curl >/dev/null || err_msg_exit "'curl' not found."
+type jq >/dev/null || err_msg_exit "'jq' not found."
+
+usage() {
+    printf "%sQuery the Prowlarr search API from the command line.%s
+
+%sUsage:%s
+    %s [OPTIONS] {search, config, indexers, categories, open}
+        -h                        Show this message and exit.
+        -r                        Raw output, no coloring.
+        -v                        Verbosisty, up to -vv.
+        -s                        Start prowlarr.service if not running.
+        -k                        Stop prowlarr.service before exiting.
+        -u PROWLARR_URL           Prowlarr URL.
+        -a API_KEY                Prowlarr API key, will query prowlarr if not provided.
+    %s search [OPTIONS] QUERY   Perform a search.
+        -f FORMAT                 Output format, in jq syntax, full json output if not provided.
+        -c CATEGORY               Restrict search to caregories.
+        -i INDEXER                Restrict search to indexers.
+                                  INDEXER must be a configured indexer.
+        -s SORTKEY                Sort results by key.
+    %s indexers             List configured indexers.
+    %s categories           List torrent categories.
+    %s config               Show prowlarr config (json).
+    %s open                 Open the prowlarr dashboard using '%s'.
+
+%sExamples:%s
+    Search for big buck bunny on all configured indexers.
+    %s$ %s search big buck bunny%s
+    Search for big buck bunny movies/tv on tpb indexer.
+    %s$ %s search -c movies -c tv -i thepiratebay big buck bunny%s
+    Search for ubuntu sorted by seeders.
+    %s$ %s search -s seeders ubuntu%s
+    Search for ubuntu and output the title and link, format with column.
+    %s$ %s search -f '\(.title)|\(.guid//.magnetUrl)' ubuntu | column -t -s\"|\"%s
+" "$BOLD" "$RESET" \
+        "$BOLD" "$RESET" "$CMD_NAME" "$CMD_NAME" "$CMD_NAME" "$CMD_NAME" "$CMD_NAME" "$CMD_NAME" "$OPEN_CMD" \
+        "$BOLD" "$RESET" \
+        "$COLOR2" "$CMD_NAME" "$RESET" \
+        "$COLOR2" "$CMD_NAME" "$RESET" \
+        "$COLOR2" "$CMD_NAME" "$RESET" \
+        "$COLOR2" "$CMD_NAME" "$RESET"
+}
+
+has_prowlarr() {
+    # Check to see if the Prowlarr service file is installed.
+    systemctl list-unit-files prowlarr.service >/dev/null
+}
+
+check_prowlarr() {
+    # Check if the Prowlarr service is active.
+    systemctl is-active prowlarr.service >/dev/null
+}
+
+stop_prowlarr() {
+    # Stop the Prowlarr service if it is running.
+    check_prowlarr &&
+        msg 1 "Stopping Prowlarr." &&
+        sudo systemctl stop prowlarr.service
+}
+
+check_url() {
+    curl --silent "$PROWLARR_URL" >/dev/null
+}
+
+join_by() {
+    # Join elements of array on string.
+    # From: https://stackoverflow.com/questions/1527049/how-can-i-join-elements-of-an-array-in-bash
+    # Args:
+    #   $1: join string
+    #   $2: array
+    # Example:
+    #   $ join_by "&a=" x y z
+    #   &a=x&a=y&a=z
+    local d=${1-} f=${2-}
+    if shift 2; then
+        printf "%s" "$f" "${@/#/$d}"
+    fi
+}
+
+fetch_apikey() {
+    # Fetches the Prowlarr api key
+    curl "$PROWLARR_URL/initialize.js" -s | grep -oP "apiKey:\s*'\K[^']*"
+}
+
+fetch_indexers() {
+    [ -n "${INDEXERS[*]}" ] && return
+    local endpoint="indexer"
+    local url="$PROWLARR_URL/$API_ROOT/$endpoint"
+
+    INDEXERS=()
+    while read -r key value; do
+        INDEXERS[$key]=$value
+    done < <(curl --silent "$url" \
+        -H "X-Api-Key: $API_KEY" | jq -r ".[] | .definitionName, .id" | paste -d' ' - - | tr '[:upper:]' '[:lower:]')
+}
+
+fetch_categories() {
+    [ -n "${CATEGORIES[*]}" ] && return
+    local endpoint="indexer/categories"
+    local url="$PROWLARR_URL/$API_ROOT/$endpoint"
+
+    CATEGORIES=()
+    while read -r key value; do
+        CATEGORIES[$key]=$value
+    done < <(curl --silent "$url" \
+        -H "X-Api-Key: $API_KEY" | jq -r ".[] | .name, .id, (.subCategories[] | .name, .id)" | paste -d' ' - - | tr '[:upper:]' '[:lower:]')
+}
+
+config() {
+    # Query Prowlarr for the server's configuration.
+    local endpoint="config/host"
+    local url="$PROWLARR_URL/$API_ROOT/$endpoint?$ID_PARAMETER"
+    curl --silent "$url" \
+        -H "X-Api-Key: $API_KEY" | "$JQ_COMMAND"
+}
+
+search() {
+    # Perform a search.
+    # Args:
+    #   $1: Search query
+    #   $2: Category array
+    #   $3: Indexer array
+    #   $4: jq filter
+    local query="$1"
+    declare -a categories=($2)
+    declare -a indexer=($3)
+    local jq_arg="$4"
+    local category_str
+    local indexer_str
+    [ "${#categories[@]}" -gt 0 ] && category_str="&Categories=$(join_by '&Categories=' "${categories[@]}")"
+    [ "${#indexer[@]}" -gt 0 ] && indexer_str="&IndexerIds=$(join_by '&IndexerIds=' "${indexer[@]}")"
+    local endpoint="search"
+    local url="$PROWLARR_URL/$API_ROOT/$endpoint?Type=search$indexer_str$category_str"
+    curl --silent -G "$url" \
+        -H "X-Api-Key: $API_KEY" \
+        --data-urlencode "Query=$query" \
+        --compressed | $JQ_COMMAND "$jq_arg"
+}
+
+# Defaults
+VERBOSE=0
+PROWLARR_URL="http://localhost:9696"
+API_KEY=""
+START=""
+STOP=""
+JQ_COMMAND="jq"
+# Parse options to the command
+while getopts ":rhvsku:a:" opt; do
+    case ${opt} in
+    "r")
+        BOLD=""
+        RESET=""
+        COLOR1=""
+        COLOR2=""
+        JQ_COMMAND="jq --monochrome-output -r"
+        msg 2 "Raw output."
+        ;;
+    "h")
+        usage
+        exit 0
+        ;;
+    "v")
+        VERBOSE=$((VERBOSE + 1))
+        ;;
+    "s")
+        has_prowlarr || err_msg_exit "No prowlarr service file found."
+        START=1
+        ;;
+    "k")
+        has_prowlarr || err_msg_exit "No prowlarr service file found."
+        STOP=1
+        ;;
+    "u")
+        PROWLARR_URL="$OPTARG"
+        msg 2 "Using prowlarr url: \"$PROWLARR_URL\""
+        ;;
+    "a")
+        API_KEY="$OPTARG"
+        msg 2 "Using API key: \"$API_KEY\""
+        ;;
+    "?")
+        usage >&2
+        err_msg_exit "Invalid Option: -$OPTARG"
+        ;;
+    esac
+done
+shift $((OPTIND - 1))
+
+# Subcommands which don't require prowlarr to be running.
+subcommand="$1"
+case "$subcommand" in
+"open")
+    msg 1 "Opening with \"$OPEN_CMD\""
+    $OPEN_CMD "$PROWLARR_URL" && exit 0
+    ;;
+"")
+    usage
+    exit 0
+    ;;
+"search" | "config" | "indexers" | "categories")
+    # Just to not trigger invalid argument here.
+    ;;
+*)
+    usage >&2
+    err_msg_exit "Invalid argument \"$subcommand\" should be either 'search', 'config', 'indexers' 'categories', or 'open'."
+    ;;
+esac
+
+# Start prowlarr
+if [ -n "$START" ] && ! check_prowlarr; then
+    msg 1 "Starting Prowlarr"
+    sudo systemctl start prowlarr.service >/dev/null
+    # Wait until the server is repsonsive, max of 5s
+    for ((i = 0; i < 10; i++)); do
+        { check_url && break; } || sleep 0.5
+    done
+fi
+
+check_url || err_msg_exit "No response from \"$PROWLARR_URL\"."
+
+# Add a trap on exit to kill the prowlarr server.
+[ -n "$STOP" ] && trap stop_prowlarr EXIT
+
+# Fetch the api key as it was not provided
+if [ -z "$API_KEY" ]; then
+    API_KEY="$(fetch_apikey)"
+    msg 1 "Fetched API key: \"$API_KEY\""
+fi
+
+# Defaults
+FILTER_CATEGORIES=()
+FILTER_INDEXERS=()
+FORMAT=""
+SORTKEY=""
+
+case "$subcommand" in
+# Parse options of the subcommand
+"search")
+    # Remove subcommand from the argument list
+    shift
+    # Reset position of argument parsing
+    OPTIND=0
+    while getopts ":f:c:i:s:" opt; do
+        case ${opt} in
+        "f")
+            FORMAT="$OPTARG"
+            ;;
+        "c")
+            fetch_categories
+            FILTER_CATEGORIES+=("${CATEGORIES[$OPTARG]}")
+            ;;
+        "i")
+            fetch_indexers
+            FILTER_INDEXERS+=("${INDEXERS[$OPTARG]}")
+            ;;
+        "s")
+            SORTKEY="$OPTARG"
+            ;;
+        ":")
+            usage >&2
+            err_msg_exit "Missing argument for option -$OPTARG"
+            ;;
+        "?")
+            usage >&2
+            err_msg_exit "Invalid Option: -$OPTARG"
+            ;;
+        esac
+    done
+    shift $((OPTIND - 1))
+    QUERY="$*"
+    # [ -z "$QUERY" ] && usage >&2 && err_msg_exit "No search query provided."
+    [ -n "${FILTER_INDEXERS[*]}" ] && msg 2 "Restrict to indexers: ${FILTER_INDEXERS[*]}"
+    [ -n "${FILTER_CATEGORIES[*]}" ] && msg 2 "Restrict to categories: ${FILTER_CATEGORIES[*]}"
+    msg 2 "Query: \"$QUERY\""
+    msg 2 "Using format: $FORMAT"
+    msg 2 "Using sortkey: \"$SORTKEY\""
+
+    JQ_ARG="."
+    [ -n "$SORTKEY" ] && JQ_ARG="$JQ_ARG | sort_by(.$SORTKEY) | reverse"
+    [ -n "$FORMAT" ] && JQ_ARG="${JQ_ARG}[] | \"$FORMAT\""
+    msg 2 "jq filter: \"$JQ_ARG\""
+    # Make the query
+    search "$QUERY" "${FILTER_CATEGORIES[*]}" "${FILTER_INDEXERS[*]}" "$JQ_ARG"
+    ;;
+"config")
+    config
+    ;;
+"indexers")
+    fetch_indexers
+    printf "%s\n" "${!INDEXERS[@]}" | sort
+    ;;
+"categories")
+    fetch_categories
+    printf "%s\n" "${!CATEGORIES[@]}" | sort
+    ;;
+esac
