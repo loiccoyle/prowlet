@@ -43,8 +43,39 @@ Completions for various shells can be found in the [`completions`](completions) 
 
 # Usage
 
-```
+```sh
+$ prowlet -h
+Query the Prowlarr search API from the command line.
 
+Usage:
+    prowlet [OPTIONS] {search, config, indexers, categories, open}
+        -h                        Show this message and exit.
+        -r                        Raw output, no coloring.
+        -v                        Verbosisty, up to -vv.
+        -s                        Start prowlarr.service if not running.
+        -k                        Stop prowlarr.service before exiting.
+        -u PROWLARR_URL           Prowlarr URL.
+        -a API_KEY                Prowlarr API key, will query prowlarr if not provided.
+    prowlet search [OPTIONS] QUERY   Perform a search.
+        -f FORMAT                 Output format, in jq syntax, full json output if not provided.
+        -c CATEGORY               Restrict search to caregories.
+        -i INDEXER                Restrict search to indexers.
+                                  INDEXER must be a configured indexer.
+        -s SORTKEY                Sort results by key.
+    prowlet indexers             List configured indexers.
+    prowlet categories           List torrent categories.
+    prowlet config               Show prowlarr config (json).
+    prowlet open                 Open the prowlarr dashboard using 'firefox'.
+
+Examples:
+    Search for big buck bunny on all configured indexers.
+    $ prowlet search big buck bunny
+    Search for big buck bunny movies/tv on tpb indexer.
+    $ prowlet search -c movies -c tv -i thepiratebay big buck bunny
+    Search for ubuntu sorted by seeders.
+    $ prowlet search -s seeders ubuntu
+    Search for ubuntu and output the title and link, format with column.
+    $ prowlet search -f '\(.title)|\(.guid//.magnetUrl)' ubuntu | column -t -s"|"
 ```
 
 # Note
