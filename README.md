@@ -5,7 +5,7 @@
 
 Query the [Prowlarr](https://github.com/prowlarr/prowlarr) search API from the command line.
 
-**Prefer a UI? Check out [`rofi-cuff`](https://github.com/loiccoyle/rofi-prowlet)**
+**Prefer a UI? Check out [`rofi-prowlet`](https://github.com/loiccoyle/rofi-prowlet)**
 
 # Installation
 
