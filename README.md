@@ -43,7 +43,7 @@ Completions for various shells can be found in the [`completions`](completions) 
 
 # Usage
 
-```sh
+```
 $ prowlet -h
 Query the Prowlarr search API from the command line.
 
