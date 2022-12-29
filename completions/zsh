@@ -4,7 +4,7 @@ IFS=$'\n'
 CATEGORIES="$(printf '"%s" ' $(prowlet categories 2> /dev/null))"
 INDEXERS="$(printf '"%s" ' $(prowlet indexers 2> /dev/null))"
 
-function _cuff {
+function _prowlet {
     local line
     local ret=1
 
