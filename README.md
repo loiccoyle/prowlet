@@ -7,7 +7,7 @@ Query the [Prowlarr](https://github.com/prowlarr/prowlarr) search API from the c
 
 **Prefer a UI? Check out [`rofi-prowlet`](https://github.com/loiccoyle/rofi-prowlet)**
 
-# Installation
+## 📦 Installation
 
 ### Dependencies
 
@@ -37,11 +37,13 @@ Using your prefered AUR helper:
 paru -S prowlet-git
 ```
 
-# Completions
+### Completions
 
 Completions for various shells can be found in the [`completions`](completions) folder.
 
-# Usage
+## 📋 Usage
+
+<!-- help start -->
 
 ```
 $ prowlet -h
@@ -78,11 +80,13 @@ Examples:
     $ prowlet search -f '\(.title)|\(.guid//.magnetUrl)' ubuntu | column -t -s"|"
 ```
 
-# Note
+<!-- help end -->
+
+## ✏️ Note
 
 To use the `-s` and `-k` options to start and stop the `prowlarr` service before/after making a query, will require `sudo` access.
 
-# TODO
+## TODO
 
 - [x] AUR package
 - [ ] write bash completion
