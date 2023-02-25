@@ -67,7 +67,7 @@ Usage:
     prowlet indexers             List configured indexers.
     prowlet categories           List torrent categories.
     prowlet config               Show prowlarr config (json).
-    prowlet open                 Open the prowlarr dashboard using 'firefox'.
+    prowlet open                 Open the prowlarr dashboard using 'xdg-open'.
 
 Examples:
     Search for big buck bunny on all configured indexers.
