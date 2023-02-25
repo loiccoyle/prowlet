@@ -36,10 +36,6 @@ msg() {
     [ "$VERBOSE" -ge "$1" ] && printf "%s%s%s%s\n" "${BOLD}" "${COLOR1}" "$2" "${RESET}" >&2
 }
 
-# Check requirements
-type curl >/dev/null || err_msg_exit "'curl' not found."
-type jq >/dev/null || err_msg_exit "'jq' not found."
-
 usage() {
     printf "%sQuery the Prowlarr search API from the command line.%s
 
@@ -225,6 +221,10 @@ while getopts ":rhvsku:a:" opt; do
     esac
 done
 shift $((OPTIND - 1))
+
+# Check requirements
+type curl >/dev/null || err_msg_exit "'curl' not found."
+type jq >/dev/null || err_msg_exit "'jq' not found."
 
 # Subcommands which don't require prowlarr to be running.
 subcommand="$1"
