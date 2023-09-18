@@ -115,7 +115,7 @@ join_by() {
 
 fetch_apikey() {
     # Fetches the Prowlarr api key
-    curl "$PROWLARR_URL/initialize.js" -s | grep -oP "apiKey:\s*'\K[^']*"
+    curl "$PROWLARR_URL/initialize.json" -s | grep -oP '"apiKey":\s*"\K[^"]*'
 }
 
 fetch_indexers() {
